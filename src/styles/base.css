@@ -1,0 +1,1452 @@
+/* ─────────────────────────────────────────────────────────────────────────
+   DESIGN LAYER — base + components (v2).
+   Patina = copper→verdigris hue + a PIXEL-DITHER verdigris texture (dots
+   masked by noise) + edge-bloom, all scaled by `--patina`. Plus a whole-page
+   tarnish veil driven by `--page-tarnish`.
+   ───────────────────────────────────────────────────────────────────────── */
+
+* {
+  box-sizing: border-box;
+}
+html {
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: var(--t-body);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  /* The bench is the constant: it never oxidizes. Only the objects on it wear,
+     and the page's accumulated tarnish blooms in from the EDGES (.tarnish-veil),
+     never behind the content — so cards always separate from the ground. */
+  background-color: var(--bench);
+}
+
+a {
+  color: inherit;
+}
+img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  font-weight: 500;
+  line-height: 1.06;
+  letter-spacing: -0.01em;
+  margin: 0;
+}
+:focus-visible {
+  outline: 2px solid var(--brass-bright);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+::selection {
+  background: var(--verdigris);
+  color: var(--bench);
+}
+
+/* ── Helpers ── */
+.container {
+  width: min(100% - 2.5rem, 72rem);
+  margin-inline: auto;
+}
+.label {
+  font-family: var(--font-mono);
+  font-size: var(--t-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.muted {
+  color: var(--muted);
+}
+.tag-chip {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+  border: 1px solid var(--hairline-bright);
+  border-radius: var(--radius);
+  padding: 0.12rem 0.4rem;
+}
+
+/* ── Pixel icons — now sized to actually read ── */
+.pixicon {
+  display: inline-block;
+  vertical-align: -0.15em;
+  width: 1.15em;
+  height: 1.15em;
+  shape-rendering: crispEdges;
+  color: var(--brass);
+}
+.pixicon--lg {
+  width: 30px;
+  height: 30px;
+}
+.pixicon--xl {
+  width: 46px;
+  height: 46px;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   PATINA SURFACE + TEXTURE
+   ───────────────────────────────────────────────────────────────────────── */
+.patina {
+  --patina: 0;
+  --tint: color-mix(in oklch, var(--brass), var(--verdigris) calc(var(--patina) * 100%));
+  /* The one colour every card feature ages along: fresh brass → aged verdigris. */
+  --feat: color-mix(in oklch, var(--brass), var(--verdigris) calc(var(--patina) * 100%));
+  position: relative;
+  isolation: isolate;
+  background: color-mix(in oklch, var(--plate), var(--tint) calc(var(--patina) * 15%));
+  border: 1px solid
+    color-mix(in oklch, var(--hairline), var(--tint) calc(var(--patina) * 90%));
+  border-radius: var(--radius-lg);
+  transition:
+    background-color var(--base) var(--ease),
+    border-color var(--base) var(--ease);
+}
+
+/* ── Whole-page EDGE-BLOOM ── the site's accumulated wear as a bloom of dots
+   that crowds the page rim and dissolves before it reaches the content. Same
+   dot vocabulary as the cards, at page scale. Anchored to #root (absolute, full
+   document height) so it's PART OF THE PAGE and scrolls — not glued to the
+   viewport. Sits behind .site-main / .site-foot (z-index 2). */
+#root {
+  position: relative;
+}
+.tarnish-veil {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  /* TERRAIN (locked): 5-colour dots (--terrain-field) carved into organic
+     landmasses (--terrain-blob), biased to the top & bottom horizon, drifting. */
+  --bg-dot: radial-gradient(#000 26%, transparent 32%);
+  --bg-dot-size: 8px;
+  --bg-edge: linear-gradient(180deg, #000 0%, transparent 24%, transparent 76%, #000 100%);
+  background: var(--terrain-field);
+  -webkit-mask-image: var(--bg-dot), var(--terrain-blob), var(--bg-edge);
+  mask-image: var(--bg-dot), var(--terrain-blob), var(--bg-edge);
+  -webkit-mask-size: var(--bg-dot-size) var(--bg-dot-size), 640px 640px, 100% 100%;
+  mask-size: var(--bg-dot-size) var(--bg-dot-size), 640px 640px, 100% 100%;
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
+  opacity: calc(var(--page-tarnish) * 1.15);
+  transition: opacity var(--slow) var(--ease);
+  /* Very slow, subtle drift of ONLY the blob layer (dots + edge stay put), so
+     the landmasses settle like weather rather than "animate". */
+  animation: terrain-drift 54s ease-in-out infinite alternate;
+}
+@keyframes terrain-drift {
+  from { -webkit-mask-position: 0 0, 0px 0px, 0 0; mask-position: 0 0, 0px 0px, 0 0; }
+  to { -webkit-mask-position: 0 0, -52px 34px, 0 0; mask-position: 0 0, -52px 34px, 0 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tarnish-veil { animation: none; }
+}
+
+/* ═════════════════════════════════════════════════════════════════════════
+   DOT ASSETS (locked) — the images every dot samples its colour from.
+   ═════════════════════════════════════════════════════════════════════════ */
+
+/* --terrain-blob: LOW-frequency fractalNoise thresholded near-binary (feFuncA
+   discrete) → organic "landmass" regions with hard, irregular coastlines. Used
+   as a MASK layer for the background, intersected with the dot grid + edge: a
+   dot lights only where it's a dot AND inside a blob AND within the edge zone.
+   --terrain-field: turbulence collapsed to grayscale then QUANTIZED into the 5
+   dot tones (feFuncR/G/B discrete), interleaved so neighbours differ → the
+   background's salt-and-pepper (RANDOM) colour. Used as the BACKGROUND the bg
+   dots + the card corner-foxing reveal. */
+:root {
+  --terrain-blob: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='340' height='340'%3E%3Cfilter id='tb'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.014' numOctaves='2' seed='11' stitchTiles='stitch'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='discrete' tableValues='0 0 0 0 0 1 1 1'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23tb)'/%3E%3C/svg%3E");
+  /* 5-tone quantized noise: turbulence → grayscale → discrete map into the dot
+     palette (umber · pale-verdigris · copper · verdigris · terracotta, interleaved
+     so neighbouring noise levels differ in hue → salt-and-pepper variety). */
+  --terrain-field: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='tf'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.11' numOctaves='2' seed='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 0 0 0 0 1'/%3E%3CfeComponentTransfer%3E%3CfeFuncR type='discrete' tableValues='0.369 0.561 0.612 0.431 0.788'/%3E%3CfeFuncG type='discrete' tableValues='0.290 0.698 0.420 0.561 0.510'/%3E%3CfeFuncB type='discrete' tableValues='0.220 0.631 0.263 0.502 0.306'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23tf)'/%3E%3C/svg%3E");
+  /* Shared round-dot mask cell — pair with a square mask-size for round dots. */
+  --dot-round: radial-gradient(#000 40%, transparent 46%);
+  /* Card dot-bar ramp — an ORDERED left→right patina progression (terracotta →
+     copper → umber → DEEP-verdigris → PALE-verdigris) in five equal bands, with
+     CLASSIC ORDERED (Bayer 4×4) dithering ONLY in a small window around each band
+     boundary — solid cores, stippled transitions, never random throughout.
+     Left-anchored + no-repeat on a fixed 5px grid, so the bar REVEALS more of the
+     progression as it widens with wear; the ramp completes (reaches pale
+     verdigris) at 250px ≈ the half-card full-patina width, and a same-colour tail
+     fills any overshoot. Unlike --divider-ramp, the bands are equal so no single
+     colour dominates. --card-dots-feature is the same ramp with ~2× wider bands
+     (completes at 550px) for the full-width feature card, whose 50% bar is ~544px
+     and would otherwise show only tail. Regenerate with scratchpad/gencarddots.mjs. */
+  --card-dots: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1120' height='10'%3E%3Cdefs%3E%3Cpattern id='t' width='5' height='5' patternUnits='userSpaceOnUse'%3E%3Ccircle cx='2.5' cy='2.5' r='2' fill='%238fb2a1'/%3E%3C/pattern%3E%3C/defs%3E%3Crect x='250' y='0' width='870' height='10' fill='url(%23t)'/%3E%3Ccircle cx='2.5' cy='2.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='7.5' cy='2.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='12.5' cy='2.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='17.5' cy='2.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='22.5' cy='2.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='27.5' cy='2.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='32.5' cy='2.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='37.5' cy='2.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='42.5' cy='2.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='47.5' cy='2.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='52.5' cy='2.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='57.5' cy='2.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='62.5' cy='2.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='67.5' cy='2.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='72.5' cy='2.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='77.5' cy='2.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='82.5' cy='2.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='87.5' cy='2.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='92.5' cy='2.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='97.5' cy='2.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='102.5' cy='2.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='107.5' cy='2.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='112.5' cy='2.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='117.5' cy='2.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='122.5' cy='2.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='127.5' cy='2.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='132.5' cy='2.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='137.5' cy='2.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='142.5' cy='2.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='147.5' cy='2.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='152.5' cy='2.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='157.5' cy='2.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='162.5' cy='2.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='167.5' cy='2.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='172.5' cy='2.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='177.5' cy='2.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='182.5' cy='2.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='187.5' cy='2.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='192.5' cy='2.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='197.5' cy='2.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='202.5' cy='2.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='207.5' cy='2.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='212.5' cy='2.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='217.5' cy='2.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='222.5' cy='2.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='227.5' cy='2.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='232.5' cy='2.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='237.5' cy='2.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='242.5' cy='2.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='247.5' cy='2.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='2.5' cy='7.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='7.5' cy='7.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='12.5' cy='7.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='17.5' cy='7.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='22.5' cy='7.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='27.5' cy='7.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='32.5' cy='7.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='37.5' cy='7.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='42.5' cy='7.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='47.5' cy='7.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='52.5' cy='7.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='57.5' cy='7.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='62.5' cy='7.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='67.5' cy='7.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='72.5' cy='7.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='77.5' cy='7.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='82.5' cy='7.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='87.5' cy='7.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='92.5' cy='7.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='97.5' cy='7.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='102.5' cy='7.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='107.5' cy='7.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='112.5' cy='7.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='117.5' cy='7.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='122.5' cy='7.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='127.5' cy='7.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='132.5' cy='7.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='137.5' cy='7.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='142.5' cy='7.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='147.5' cy='7.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='152.5' cy='7.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='157.5' cy='7.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='162.5' cy='7.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='167.5' cy='7.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='172.5' cy='7.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='177.5' cy='7.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='182.5' cy='7.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='187.5' cy='7.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='192.5' cy='7.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='197.5' cy='7.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='202.5' cy='7.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='207.5' cy='7.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='212.5' cy='7.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='217.5' cy='7.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='222.5' cy='7.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='227.5' cy='7.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='232.5' cy='7.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='237.5' cy='7.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='242.5' cy='7.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='247.5' cy='7.5' r='2' fill='%238fb2a1'/%3E%3C/svg%3E");
+  /* Vertical version of --card-dots, for the publication card's column divider:
+     two dot columns wide, the same 5 equal bands + Bayer-dithered boundaries, but
+     running bottom→top (fresh at the bottom, aged up). Bottom-anchored + revealed
+     as the bar grows; the five bands complete at 200px ≈ the bar's full-wear
+     height, so no single colour dominates. Regenerate with scratchpad/genrailbar.mjs. */
+  --rail-bar: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='600'%3E%3Cdefs%3E%3Cpattern id='t' width='5' height='5' patternUnits='userSpaceOnUse'%3E%3Ccircle cx='2.5' cy='2.5' r='2' fill='%238fb2a1'/%3E%3C/pattern%3E%3C/defs%3E%3Crect x='0' y='0' width='10' height='400' fill='url(%23t)'/%3E%3Ccircle cx='2.5' cy='597.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='7.5' cy='597.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='2.5' cy='592.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='7.5' cy='592.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='2.5' cy='587.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='7.5' cy='587.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='2.5' cy='582.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='7.5' cy='582.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='2.5' cy='577.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='7.5' cy='577.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='2.5' cy='572.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='7.5' cy='572.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='2.5' cy='567.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='7.5' cy='567.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='2.5' cy='562.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='7.5' cy='562.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='2.5' cy='557.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='7.5' cy='557.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='2.5' cy='552.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='7.5' cy='552.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='2.5' cy='547.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='7.5' cy='547.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='2.5' cy='542.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='7.5' cy='542.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='2.5' cy='537.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='7.5' cy='537.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='2.5' cy='532.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='7.5' cy='532.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='2.5' cy='527.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='7.5' cy='527.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='2.5' cy='522.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='7.5' cy='522.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='2.5' cy='517.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='7.5' cy='517.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='2.5' cy='512.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='7.5' cy='512.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='2.5' cy='507.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='7.5' cy='507.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='2.5' cy='502.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='7.5' cy='502.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='2.5' cy='497.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='7.5' cy='497.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='2.5' cy='492.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='7.5' cy='492.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='2.5' cy='487.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='7.5' cy='487.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='2.5' cy='482.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='7.5' cy='482.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='2.5' cy='477.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='7.5' cy='477.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='2.5' cy='472.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='7.5' cy='472.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='2.5' cy='467.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='7.5' cy='467.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='2.5' cy='462.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='7.5' cy='462.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='2.5' cy='457.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='7.5' cy='457.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='2.5' cy='452.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='7.5' cy='452.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='2.5' cy='447.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='7.5' cy='447.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='2.5' cy='442.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='7.5' cy='442.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='2.5' cy='437.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='7.5' cy='437.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='2.5' cy='432.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='7.5' cy='432.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='2.5' cy='427.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='7.5' cy='427.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='2.5' cy='422.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='7.5' cy='422.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='2.5' cy='417.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='7.5' cy='417.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='2.5' cy='412.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='7.5' cy='412.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='2.5' cy='407.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='7.5' cy='407.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='2.5' cy='402.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='7.5' cy='402.5' r='2' fill='%238fb2a1'/%3E%3C/svg%3E");
+  --card-dots-feature: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1120' height='10'%3E%3Cdefs%3E%3Cpattern id='t' width='5' height='5' patternUnits='userSpaceOnUse'%3E%3Ccircle cx='2.5' cy='2.5' r='2' fill='%238fb2a1'/%3E%3C/pattern%3E%3C/defs%3E%3Crect x='550' y='0' width='570' height='10' fill='url(%23t)'/%3E%3Ccircle cx='2.5' cy='2.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='7.5' cy='2.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='12.5' cy='2.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='17.5' cy='2.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='22.5' cy='2.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='27.5' cy='2.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='32.5' cy='2.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='37.5' cy='2.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='42.5' cy='2.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='47.5' cy='2.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='52.5' cy='2.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='57.5' cy='2.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='62.5' cy='2.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='67.5' cy='2.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='72.5' cy='2.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='77.5' cy='2.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='82.5' cy='2.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='87.5' cy='2.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='92.5' cy='2.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='97.5' cy='2.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='102.5' cy='2.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='107.5' cy='2.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='112.5' cy='2.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='117.5' cy='2.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='122.5' cy='2.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='127.5' cy='2.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='132.5' cy='2.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='137.5' cy='2.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='142.5' cy='2.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='147.5' cy='2.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='152.5' cy='2.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='157.5' cy='2.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='162.5' cy='2.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='167.5' cy='2.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='172.5' cy='2.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='177.5' cy='2.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='182.5' cy='2.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='187.5' cy='2.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='192.5' cy='2.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='197.5' cy='2.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='202.5' cy='2.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='207.5' cy='2.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='212.5' cy='2.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='217.5' cy='2.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='222.5' cy='2.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='227.5' cy='2.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='232.5' cy='2.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='237.5' cy='2.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='242.5' cy='2.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='247.5' cy='2.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='252.5' cy='2.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='257.5' cy='2.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='262.5' cy='2.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='267.5' cy='2.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='272.5' cy='2.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='277.5' cy='2.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='282.5' cy='2.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='287.5' cy='2.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='292.5' cy='2.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='297.5' cy='2.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='302.5' cy='2.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='307.5' cy='2.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='312.5' cy='2.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='317.5' cy='2.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='322.5' cy='2.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='327.5' cy='2.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='332.5' cy='2.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='337.5' cy='2.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='342.5' cy='2.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='347.5' cy='2.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='352.5' cy='2.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='357.5' cy='2.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='362.5' cy='2.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='367.5' cy='2.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='372.5' cy='2.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='377.5' cy='2.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='382.5' cy='2.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='387.5' cy='2.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='392.5' cy='2.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='397.5' cy='2.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='402.5' cy='2.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='407.5' cy='2.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='412.5' cy='2.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='417.5' cy='2.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='422.5' cy='2.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='427.5' cy='2.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='432.5' cy='2.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='437.5' cy='2.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='442.5' cy='2.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='447.5' cy='2.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='452.5' cy='2.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='457.5' cy='2.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='462.5' cy='2.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='467.5' cy='2.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='472.5' cy='2.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='477.5' cy='2.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='482.5' cy='2.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='487.5' cy='2.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='492.5' cy='2.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='497.5' cy='2.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='502.5' cy='2.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='507.5' cy='2.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='512.5' cy='2.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='517.5' cy='2.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='522.5' cy='2.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='527.5' cy='2.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='532.5' cy='2.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='537.5' cy='2.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='542.5' cy='2.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='547.5' cy='2.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='2.5' cy='7.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='7.5' cy='7.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='12.5' cy='7.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='17.5' cy='7.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='22.5' cy='7.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='27.5' cy='7.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='32.5' cy='7.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='37.5' cy='7.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='42.5' cy='7.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='47.5' cy='7.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='52.5' cy='7.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='57.5' cy='7.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='62.5' cy='7.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='67.5' cy='7.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='72.5' cy='7.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='77.5' cy='7.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='82.5' cy='7.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='87.5' cy='7.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='92.5' cy='7.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='97.5' cy='7.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='102.5' cy='7.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='107.5' cy='7.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='112.5' cy='7.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='117.5' cy='7.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='122.5' cy='7.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='127.5' cy='7.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='132.5' cy='7.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='137.5' cy='7.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='142.5' cy='7.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='147.5' cy='7.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='152.5' cy='7.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='157.5' cy='7.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='162.5' cy='7.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='167.5' cy='7.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='172.5' cy='7.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='177.5' cy='7.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='182.5' cy='7.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='187.5' cy='7.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='192.5' cy='7.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='197.5' cy='7.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='202.5' cy='7.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='207.5' cy='7.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='212.5' cy='7.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='217.5' cy='7.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='222.5' cy='7.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='227.5' cy='7.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='232.5' cy='7.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='237.5' cy='7.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='242.5' cy='7.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='247.5' cy='7.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='252.5' cy='7.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='257.5' cy='7.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='262.5' cy='7.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='267.5' cy='7.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='272.5' cy='7.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='277.5' cy='7.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='282.5' cy='7.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='287.5' cy='7.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='292.5' cy='7.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='297.5' cy='7.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='302.5' cy='7.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='307.5' cy='7.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='312.5' cy='7.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='317.5' cy='7.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='322.5' cy='7.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='327.5' cy='7.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='332.5' cy='7.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='337.5' cy='7.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='342.5' cy='7.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='347.5' cy='7.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='352.5' cy='7.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='357.5' cy='7.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='362.5' cy='7.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='367.5' cy='7.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='372.5' cy='7.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='377.5' cy='7.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='382.5' cy='7.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='387.5' cy='7.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='392.5' cy='7.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='397.5' cy='7.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='402.5' cy='7.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='407.5' cy='7.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='412.5' cy='7.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='417.5' cy='7.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='422.5' cy='7.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='427.5' cy='7.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='432.5' cy='7.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='437.5' cy='7.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='442.5' cy='7.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='447.5' cy='7.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='452.5' cy='7.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='457.5' cy='7.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='462.5' cy='7.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='467.5' cy='7.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='472.5' cy='7.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='477.5' cy='7.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='482.5' cy='7.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='487.5' cy='7.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='492.5' cy='7.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='497.5' cy='7.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='502.5' cy='7.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='507.5' cy='7.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='512.5' cy='7.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='517.5' cy='7.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='522.5' cy='7.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='527.5' cy='7.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='532.5' cy='7.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='537.5' cy='7.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='542.5' cy='7.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='547.5' cy='7.5' r='2' fill='%238fb2a1'/%3E%3C/svg%3E");
+  /* Divider ramp — an ORDERED left→right patina progression for the dotted
+     dividers (card rule + hero seam). It IS the dots: a row-grid of solid-colour
+     circles (each dot exactly ONE palette colour — never split), so no mask and
+     NO stretch (background-size stays auto → dots stay round + on a fixed 5px
+     grid). The colour is chosen by CLASSIC ORDERED (Bayer 4×4) dithering of the
+     x-position, so transitions between adjacent palette colours come out as a
+     proper stipple. Order: darkest orange → lighter orange → brown → light
+     verdigris → dark verdigris; the progression completes at 260px, then a tiled
+     fully-aged verdigris tail fills wider dividers. Because it's fixed-scale +
+     left-anchored, a divider REVEALS more of the progression as it grows/ages.
+     Regenerate with scratchpad/genramp.mjs. */
+  --divider-ramp: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1120' height='10'%3E%3Cdefs%3E%3Cpattern id='v' width='5' height='5' patternUnits='userSpaceOnUse'%3E%3Ccircle cx='2.5' cy='2.5' r='2' fill='%236e8f80'/%3E%3C/pattern%3E%3C/defs%3E%3Ccircle cx='2.5' cy='2.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='7.5' cy='2.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='12.5' cy='2.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='17.5' cy='2.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='22.5' cy='2.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='27.5' cy='2.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='32.5' cy='2.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='37.5' cy='2.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='42.5' cy='2.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='47.5' cy='2.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='52.5' cy='2.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='57.5' cy='2.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='62.5' cy='2.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='67.5' cy='2.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='72.5' cy='2.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='77.5' cy='2.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='82.5' cy='2.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='87.5' cy='2.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='92.5' cy='2.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='97.5' cy='2.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='102.5' cy='2.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='107.5' cy='2.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='112.5' cy='2.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='117.5' cy='2.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='122.5' cy='2.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='127.5' cy='2.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='132.5' cy='2.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='137.5' cy='2.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='142.5' cy='2.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='147.5' cy='2.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='152.5' cy='2.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='157.5' cy='2.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='162.5' cy='2.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='167.5' cy='2.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='172.5' cy='2.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='177.5' cy='2.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='182.5' cy='2.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='187.5' cy='2.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='192.5' cy='2.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='197.5' cy='2.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='202.5' cy='2.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='207.5' cy='2.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='212.5' cy='2.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='217.5' cy='2.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='222.5' cy='2.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='227.5' cy='2.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='232.5' cy='2.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='237.5' cy='2.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='242.5' cy='2.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='247.5' cy='2.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='252.5' cy='2.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='257.5' cy='2.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='2.5' cy='7.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='7.5' cy='7.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='12.5' cy='7.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='17.5' cy='7.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='22.5' cy='7.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='27.5' cy='7.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='32.5' cy='7.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='37.5' cy='7.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='42.5' cy='7.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='47.5' cy='7.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='52.5' cy='7.5' r='2' fill='%239c6b43'/%3E%3Ccircle cx='57.5' cy='7.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='62.5' cy='7.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='67.5' cy='7.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='72.5' cy='7.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='77.5' cy='7.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='82.5' cy='7.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='87.5' cy='7.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='92.5' cy='7.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='97.5' cy='7.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='102.5' cy='7.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='107.5' cy='7.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='112.5' cy='7.5' r='2' fill='%23c9824e'/%3E%3Ccircle cx='117.5' cy='7.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='122.5' cy='7.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='127.5' cy='7.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='132.5' cy='7.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='137.5' cy='7.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='142.5' cy='7.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='147.5' cy='7.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='152.5' cy='7.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='157.5' cy='7.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='162.5' cy='7.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='167.5' cy='7.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='172.5' cy='7.5' r='2' fill='%235e4a38'/%3E%3Ccircle cx='177.5' cy='7.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='182.5' cy='7.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='187.5' cy='7.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='192.5' cy='7.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='197.5' cy='7.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='202.5' cy='7.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='207.5' cy='7.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='212.5' cy='7.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='217.5' cy='7.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='222.5' cy='7.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='227.5' cy='7.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='232.5' cy='7.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='237.5' cy='7.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='242.5' cy='7.5' r='2' fill='%238fb2a1'/%3E%3Ccircle cx='247.5' cy='7.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='252.5' cy='7.5' r='2' fill='%236e8f80'/%3E%3Ccircle cx='257.5' cy='7.5' r='2' fill='%236e8f80'/%3E%3Crect x='260' y='0' width='860' height='10' fill='url(%23v)'/%3E%3C/svg%3E");
+}
+
+/* ═══ CARD — ENGRAVED (locked). Clean solid plate (separates from the terrain
+   ground); the dots live in a 2-row round-dot band under the title, an ORDERED
+   --card-dots ramp (orange → verdigris, Bayer-dithered at the band boundaries)
+   that grows in width with wear — reaching half the card when fully worn. A faint
+   field-coloured foxing corrodes one corner. Features live on .plate
+   so WorkRow / contact plates (.patina, no .plate) stay clean. ═══ */
+.plate {
+  transition:
+    background-color var(--base) var(--ease),
+    border-color var(--base) var(--ease),
+    transform var(--fast) var(--ease),
+    box-shadow var(--fast) var(--ease);
+}
+.plate::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  --corner: calc(12% + var(--patina) * 22%);
+  background: var(--terrain-field);
+  -webkit-mask-image: var(--dot-round),
+    radial-gradient(circle at 100% 100%, #000 0, transparent var(--corner));
+  mask-image: var(--dot-round),
+    radial-gradient(circle at 100% 100%, #000 0, transparent var(--corner));
+  -webkit-mask-size: 5px 5px, 100% 100%;
+  mask-size: 5px 5px, 100% 100%;
+  -webkit-mask-composite: source-in;
+  mask-composite: intersect;
+  opacity: calc(var(--patina) * 0.95);
+  transition: opacity var(--base) var(--ease);
+  pointer-events: none;
+}
+.card__title::after {
+  content: '';
+  display: block;
+  height: 10px; /* two 5px dot rows — the ramp SVG draws the dots itself */
+  width: calc(30% + var(--patina) * 20%); /* grows with wear → half the card when fully worn */
+  margin-top: 0.55rem;
+  background: var(--card-dots) left center / auto no-repeat;
+  transition: width var(--base) var(--ease);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   FRAME
+   ───────────────────────────────────────────────────────────────────────── */
+.site-head {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  border-bottom: 1px solid
+    color-mix(in oklch, var(--hairline), var(--verdigris) calc(var(--page-tarnish) * 80%));
+  background: color-mix(in srgb, var(--bench) 84%, transparent);
+  backdrop-filter: blur(8px);
+}
+.site-head__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-4);
+  padding-block: var(--s-3);
+}
+.wordmark {
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  letter-spacing: 0.04em;
+  text-decoration: none;
+  color: var(--ink);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2) var(--s-4);
+  justify-content: flex-end;
+}
+.nav a {
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  letter-spacing: 0.03em;
+  text-decoration: none;
+  color: var(--muted);
+  padding-block: 0.15rem;
+  border-bottom: 1px solid transparent;
+  transition: color var(--fast) var(--ease), border-color var(--fast) var(--ease);
+  white-space: nowrap;
+}
+.nav a:hover {
+  color: var(--ink);
+}
+.nav a.active {
+  color: var(--ink);
+  border-bottom-color: var(--brass);
+}
+
+.site-main {
+  position: relative;
+  z-index: 2;
+  padding-block: var(--s-6) var(--s-7);
+  min-height: 60vh;
+}
+
+.site-foot {
+  position: relative;
+  z-index: 2;
+  border-top: 1px solid
+    color-mix(in oklch, var(--hairline), var(--verdigris) calc(var(--page-tarnish) * 80%));
+  background: var(--bench-2);
+  margin-top: var(--s-7);
+}
+.site-foot__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-4);
+  justify-content: space-between;
+  align-items: center;
+  padding-block: var(--s-5);
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  color: var(--muted);
+}
+.site-foot__row a {
+  color: var(--ink-dim);
+  text-decoration: none;
+  border-bottom: 1px solid var(--hairline-bright);
+}
+.site-foot__row a:hover {
+  color: var(--brass-bright);
+  border-bottom-color: var(--brass);
+}
+.foot-links {
+  display: flex;
+  gap: var(--s-4);
+  flex-wrap: wrap;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   SECTION HEADERS
+   ───────────────────────────────────────────────────────────────────────── */
+.section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s-4);
+  padding-bottom: var(--s-2);
+  margin-bottom: var(--s-4);
+  border-bottom: 1px solid var(--hairline);
+}
+.section-head h2 {
+  font-size: var(--t-h2);
+}
+.section-head a,
+.section-head .label {
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+  text-decoration: none;
+}
+.section-head a:hover {
+  color: var(--brass-bright);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   WORK GRID + CARDS
+   ───────────────────────────────────────────────────────────────────────── */
+.grid {
+  display: grid;
+  gap: var(--s-4);
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 26rem), 1fr));
+}
+.grid--two {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 30rem), 1fr));
+}
+
+.card {
+  text-decoration: none;
+  color: inherit;
+  display: block;
+  height: 100%;
+}
+.card .plate {
+  height: 100%;
+  padding: var(--s-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+}
+/* HOVER — "lift & seat": the plate rises a touch and a crisp brass frame seats
+   just inside the edge (registration/machined feel), the border goes fresh brass,
+   and the patina marks catch the light. No moving sweep. */
+.card:hover .plate {
+  border-color: var(--brass);
+  transform: translateY(-3px);
+  box-shadow:
+    0 10px 26px -12px rgba(0, 0, 0, 0.65),
+    inset 0 0 0 1.5px color-mix(in srgb, var(--brass-bright) 42%, transparent);
+}
+.card:hover .plate::before,
+.card:hover .card__title::after {
+  filter: brightness(1.15) saturate(1.08);
+}
+@media (prefers-reduced-motion: reduce) {
+  .card:hover .plate {
+    transform: none;
+  }
+}
+.plate__head {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  margin-bottom: var(--s-3);
+}
+.plate__date {
+  color: var(--muted);
+}
+.card__title {
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  font-weight: 500;
+  line-height: 1.12;
+  color: color-mix(in oklch, var(--ink), var(--tint) calc(var(--patina) * 34%));
+  transition: color var(--base) var(--ease);
+}
+.card__sub {
+  margin: 0.35rem 0 0;
+  color: var(--verdigris);
+  font-size: 0.72rem;
+}
+.card__blurb {
+  margin: var(--s-3) 0 0;
+  font-size: 1.02rem;
+  line-height: 1.5;
+  color: var(--ink-dim);
+  max-width: 46ch;
+}
+.card__award {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--brass-bright);
+  margin: var(--s-3) 0 0;
+}
+.card__cta {
+  margin-top: auto;
+  padding-top: var(--s-4);
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.card:hover .card__cta {
+  color: var(--brass-bright);
+}
+
+/* Feature card — a big plate for a hero project (v3). */
+.card--feature .plate {
+  padding: var(--s-6);
+}
+.card--feature .card__title {
+  font-size: 2.1rem;
+}
+.card--feature .card__blurb {
+  font-size: 1.1rem;
+  max-width: 52ch;
+}
+/* The feature plate is ~2× the width of a grid--two card, so its 50%-at-full-wear
+   bar is ~544px — far past the 250px point where --card-dots completes, leaving a
+   long single-colour tail. Swap in the wider-banded ramp (completes at 550px) so
+   the big card shows the same balanced progression, not a tail. */
+.card--feature .card__title::after {
+  background-image: var(--card-dots-feature);
+}
+
+/* ═══ PUBLICATION CARD — a TWO-COLUMN plate. Left: a small tab holding the
+   conference logo slot and the paper's status. Right: the main section (title ·
+   venue + year · authors · blurb). The LINE BETWEEN THEM is the patina meter — a
+   vertical version of the project card's dot bar (--rail-bar): bottom-anchored,
+   growing from a third of the card's height to half as it wears, revealing more
+   of the terracotta→verdigris progression as it climbs. Surface tint still shifts
+   brass→verdigris via .patina, exactly like a project plate. ═══ */
+.railcard {
+  --pub-accent: var(--verdigris);
+  display: grid;
+  grid-template-columns: 6.25rem 10px minmax(0, 1fr);
+  height: 100%;
+  overflow: hidden;
+  position: relative;
+}
+/* No project title wear-bar — the column divider is this card's patina meter. */
+.railcard .card__title::after {
+  content: none;
+}
+.railcard .card__title,
+.railcard .card__blurb,
+.railcard .pub__meta,
+.railcard .pub__authors,
+.railcard .card__cta {
+  position: relative;
+  z-index: 1;
+}
+.railcard .card__cta {
+  align-self: flex-end;
+  margin-top: auto;
+  padding: 0.4rem 0.7rem;
+  border-radius: 3px;
+  background: color-mix(in oklch, var(--brass), var(--tint) calc(var(--patina) * 30%));
+  color: var(--bench);
+  transition:
+    background-color var(--base) var(--ease),
+    color var(--fast) var(--ease);
+}
+.railcard .card__cta .pixicon {
+  color: inherit;
+}
+.card--pub:hover .railcard .card__cta {
+  background: var(--brass-bright);
+  color: var(--bench);
+}
+/* Hover lift, matching the project plate. */
+.card--pub .railcard {
+  transition:
+    background-color var(--base) var(--ease),
+    border-color var(--base) var(--ease),
+    transform var(--fast) var(--ease),
+    box-shadow var(--fast) var(--ease);
+}
+.card--pub:hover .railcard {
+  transform: translateY(-3px);
+  border-color: var(--brass);
+  box-shadow:
+    0 10px 26px -12px rgba(0, 0, 0, 0.65),
+    inset 0 0 0 1.5px color-mix(in srgb, var(--brass-bright) 42%, transparent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .card--pub:hover .railcard {
+    transform: none;
+  }
+}
+
+/* ── LEFT TAB — logo slot up top, status pinned to the bottom. ── */
+.rail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  padding: var(--s-4) var(--s-3) var(--s-4) var(--s-4);
+  min-width: 0;
+}
+/* Conference logo slot: an <img> when the venue has a mark on file, otherwise the
+   venue's short name set in mono — a real placeholder, not an empty box. */
+.pub__logo {
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 3px;
+  border: 1px solid color-mix(in oklch, var(--hairline), var(--tint) calc(var(--patina) * 90%));
+  background: color-mix(in srgb, var(--brass) 5%, transparent);
+  transition: border-color var(--base) var(--ease);
+}
+.card--pub:hover .pub__logo {
+  border-color: color-mix(in srgb, var(--brass) 55%, transparent);
+}
+.pub__logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: 14%;
+  /* Conference marks are print-black; knock them into the plate's metal. */
+  filter: grayscale(1) brightness(1.6);
+  opacity: 0.85;
+}
+.pub__logo-mark {
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.06em;
+  line-height: 1.2;
+  text-align: center;
+  padding: 0 0.25rem;
+  overflow-wrap: anywhere;
+  color: color-mix(in oklch, var(--brass-bright), var(--tint) calc(var(--patina) * 45%));
+  transition: color var(--base) var(--ease);
+}
+
+/* ── THE LINE — a vertical --card-dots, VERTICALLY CENTRED in the gutter: it
+   grows from the middle out, 45% → 65% of the card's height. The ramp itself
+   stays bottom-anchored inside the bar, so the bar still reveals the
+   terracotta→verdigris progression from its foot upward as the card ages. ── */
+.rail__bar {
+  position: relative;
+  align-self: stretch;
+}
+.rail__bar::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  translate: 0 -50%;
+  width: 10px; /* two 5px dot columns — the ramp SVG draws the dots itself */
+  height: calc(45% + var(--patina) * 20%);
+  background: var(--rail-bar) bottom left / auto no-repeat;
+  transition: height var(--base) var(--ease);
+}
+.card--pub:hover .rail__bar::after {
+  filter: brightness(1.15) saturate(1.08);
+}
+
+/* ── MAIN SECTION ── */
+.rail__body {
+  min-width: 0;
+  padding: var(--s-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+}
+/* Venue with the year beside it — one line, mono year in a quieter ink. */
+.pub__meta {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.35rem 0 0;
+  font-size: 0.72rem;
+}
+.pub__venue {
+  color: var(--pub-accent);
+}
+.pub__meta-sep {
+  color: var(--hairline-bright);
+}
+.pub__year {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: color-mix(in oklch, var(--brass-bright), var(--tint) calc(var(--patina) * 40%));
+  transition: color var(--base) var(--ease);
+}
+/* Authors — a quiet serif line, dark-theme ink. */
+.pub__authors {
+  font-family: var(--font-body);
+  font-style: italic;
+  font-size: 0.95rem;
+  line-height: 1.4;
+  margin: 0.4rem 0 0;
+  color: var(--ink-dim);
+}
+.pub__authors strong {
+  font-weight: 600;
+  font-style: normal;
+  color: var(--ink);
+}
+/* STATUS — a small mono tag in the tab, keyed by state. Wraps: the tab is narrow. */
+.pub__status {
+  font-family: var(--font-mono);
+  font-size: 0.52rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  line-height: 1.4;
+  text-align: center;
+  padding: 0.25rem 0.3rem;
+  border-radius: 3px;
+  border: 1px solid currentColor;
+  color: var(--pub-accent);
+}
+.pub__status--review {
+  color: var(--brass-bright);
+}
+.pub__status--prep {
+  color: var(--muted);
+}
+/* AWARD — optional tab box under the status. Filled rather than outlined, so an
+   honour reads as the one bright thing on the plate. */
+.pub__award {
+  font-family: var(--font-mono);
+  font-size: 0.5rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  line-height: 1.4;
+  text-align: center;
+  padding: 0.3rem 0.3rem;
+  border-radius: 3px;
+  border: 1px solid color-mix(in srgb, var(--brass-bright) 55%, transparent);
+  background: color-mix(in srgb, var(--brass) 14%, transparent);
+  color: var(--brass-bright);
+}
+
+/* Narrow cards: the tab tucks in but keeps the logo readable. */
+@media (max-width: 30rem) {
+  .railcard {
+    grid-template-columns: 5rem 10px minmax(0, 1fr);
+  }
+  .rail__body {
+    padding: var(--s-4);
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   FILTER CONTROLS
+   ───────────────────────────────────────────────────────────────────────── */
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  margin: var(--s-4) 0 var(--s-5);
+}
+.chip {
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius);
+  padding: 0.35rem 0.75rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  transition: all var(--fast) var(--ease);
+}
+.chip:hover {
+  color: var(--ink);
+  border-color: var(--hairline-bright);
+}
+.chip[aria-pressed='true'] {
+  color: var(--bench);
+  background: var(--brass);
+  border-color: var(--brass);
+}
+.chip[aria-pressed='true'] .pixicon {
+  color: var(--bench);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   LEDGER (Work v2) — a dense oxidizing index table
+   ───────────────────────────────────────────────────────────────────────── */
+.ledger {
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+.ledger__group-title {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: var(--s-3) var(--s-4);
+  background: var(--bench-2);
+  border-bottom: 1px solid var(--hairline);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.row {
+  display: grid;
+  grid-template-columns: 4.5rem 1.6rem 1fr auto;
+  align-items: center;
+  gap: var(--s-4);
+  padding: var(--s-4);
+  text-decoration: none;
+  color: inherit;
+  border-bottom: 1px solid var(--hairline);
+  position: relative;
+  isolation: isolate;
+  background: color-mix(in oklch, transparent, var(--tint) calc(var(--patina) * 22%));
+  transition: background-color var(--base) var(--ease);
+}
+.row:last-child {
+  border-bottom: 0;
+}
+.row::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-image: radial-gradient(var(--verdigris) 42%, transparent 46%);
+  background-size: 3px 3px;
+  -webkit-mask-image: var(--grain);
+  mask-image: var(--grain);
+  mask-size: 160px 160px;
+  opacity: calc(var(--patina) * 0.6);
+  transition: opacity var(--base) var(--ease);
+  pointer-events: none;
+}
+.row__year {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.row__title {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 1.12rem;
+  color: color-mix(in oklch, var(--ink), var(--tint) calc(var(--patina) * 34%));
+}
+.row__meta {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--verdigris);
+  margin-top: 0.25rem;
+}
+.row__cta {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.row:hover .row__cta {
+  color: var(--brass-bright);
+}
+@media (max-width: 640px) {
+  .row {
+    grid-template-columns: 1.6rem 1fr;
+    row-gap: var(--s-2);
+  }
+  .row__year {
+    grid-column: 2;
+  }
+  .row__cta {
+    display: none;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   SIDEBAR PANELS (v2 / v3 faked sections)
+   ───────────────────────────────────────────────────────────────────────── */
+.panel {
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-lg);
+  padding: var(--s-4);
+  background: var(--plate);
+}
+.panel + .panel {
+  margin-top: var(--s-4);
+}
+.panel__title {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: var(--s-3);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.panel ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.panel li {
+  font-size: 0.96rem;
+  color: var(--ink-dim);
+  padding-block: 0.2rem;
+}
+.panel li + li {
+  border-top: 1px dashed var(--hairline);
+  margin-top: 0.3rem;
+  padding-top: 0.5rem;
+}
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.kv {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--s-3);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  padding-block: 0.3rem;
+}
+.kv a {
+  color: var(--brass-bright);
+  text-decoration: none;
+}
+.kv span:first-child {
+  color: var(--muted);
+}
+
+/* Stats strip */
+.stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-5);
+}
+.stat__value {
+  font-family: var(--font-display);
+  font-size: 2rem;
+  line-height: 1;
+  color: var(--brass-bright);
+}
+.stat__label {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-top: 0.35rem;
+  max-width: 14ch;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   HERO — v1 (bigger portrait, denser, pixel accent)
+   ───────────────────────────────────────────────────────────────────────── */
+.hero {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--s-6);
+  align-items: center;
+  margin-bottom: var(--s-6);
+}
+.hero__portrait {
+  width: 200px;
+  height: 240px;
+  border-radius: var(--radius-lg);
+  object-fit: cover;
+  object-position: center 15%;
+  border: 1px solid var(--hairline-bright);
+  filter: saturate(0.94) contrast(1.03);
+}
+.hero__name {
+  font-size: var(--t-display);
+  margin: var(--s-2) 0 var(--s-3);
+}
+.hero__lede {
+  font-size: 1.25rem;
+  line-height: 1.45;
+  max-width: 44ch;
+  margin: 0 0 var(--s-4);
+  color: var(--ink-dim);
+}
+.hero__now {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--muted);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.hero__now b {
+  color: var(--verdigris);
+  font-weight: 400;
+}
+@media (max-width: 640px) {
+  .hero {
+    grid-template-columns: 1fr;
+    gap: var(--s-4);
+  }
+  .hero__portrait {
+    width: 150px;
+    height: 180px;
+  }
+}
+
+/* ── Hero v2 — editorial split with a tall brass portrait panel ── */
+.hero2 {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  gap: var(--s-6);
+  align-items: stretch;
+  margin-bottom: var(--s-6);
+}
+.hero2__portrait {
+  width: 100%;
+  height: 100%;
+  min-height: 340px;
+  object-fit: cover;
+  object-position: center 15%;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--hairline-bright);
+}
+.hero2__eyebrow {
+  margin-bottom: var(--s-3);
+}
+.hero2__name {
+  font-size: clamp(3rem, 2rem + 5vw, 5rem);
+  margin: 0 0 var(--s-4);
+}
+.hero2__lede {
+  font-size: 1.3rem;
+  line-height: 1.4;
+  color: var(--ink-dim);
+  max-width: 40ch;
+  margin: 0 0 var(--s-5);
+}
+@media (max-width: 760px) {
+  .hero2 {
+    grid-template-columns: 1fr;
+  }
+  .hero2__portrait {
+    min-height: 260px;
+    max-height: 320px;
+  }
+}
+
+/* ── Hero v3 — brass nameplate over an isometric pixel field ── */
+.nameplate {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--hairline-bright);
+  border-radius: var(--radius-lg);
+  padding: var(--s-7) var(--s-6);
+  margin-bottom: var(--s-6);
+  background:
+    radial-gradient(80% 120% at 15% 0%, color-mix(in oklch, var(--plate), var(--brass) 8%), var(--plate));
+}
+.nameplate::after {
+  /* faint isometric pixel field */
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background-image: repeating-linear-gradient(
+      30deg,
+      rgba(192, 138, 74, 0.06) 0 1px,
+      transparent 1px 14px
+    ),
+    repeating-linear-gradient(-30deg, rgba(110, 148, 132, 0.06) 0 1px, transparent 1px 14px);
+  pointer-events: none;
+}
+.nameplate > * {
+  position: relative;
+  z-index: 1;
+}
+.nameplate__row {
+  display: flex;
+  align-items: center;
+  gap: var(--s-6);
+  flex-wrap: wrap;
+}
+.nameplate__portrait {
+  width: 160px;
+  height: 160px;
+  border-radius: var(--radius-lg);
+  object-fit: cover;
+  object-position: center 15%;
+  border: 2px solid var(--brass);
+  flex: none;
+}
+.nameplate__name {
+  font-size: clamp(2.6rem, 1.8rem + 4vw, 4.4rem);
+  margin: var(--s-2) 0;
+}
+.nameplate__lede {
+  font-size: 1.2rem;
+  color: var(--ink-dim);
+  max-width: 40ch;
+  margin: 0;
+}
+
+/* Pixel meter (v3 tarnish indicator) */
+.meter {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-top: var(--s-4);
+}
+.meter__track {
+  display: flex;
+  gap: 2px;
+}
+.meter__cell {
+  width: 9px;
+  height: 12px;
+  background: var(--hairline-bright);
+  border-radius: 1px;
+}
+.meter__cell.on {
+  background: var(--verdigris);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   LAYOUT SCAFFOLDS for v2/v3 pages
+   ───────────────────────────────────────────────────────────────────────── */
+.with-sidebar {
+  display: grid;
+  grid-template-columns: 1fr 19rem;
+  gap: var(--s-6);
+  align-items: start;
+}
+@media (max-width: 900px) {
+  .with-sidebar {
+    grid-template-columns: 1fr;
+  }
+}
+
+.split {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr;
+  gap: var(--s-6);
+  align-items: start;
+}
+@media (max-width: 860px) {
+  .split {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Publication citation list (v3) */
+.cites {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.cite {
+  --patina: 0;
+  display: block;
+  text-decoration: none;
+  color: inherit;
+  padding: var(--s-4) 0 var(--s-4) var(--s-4);
+  border-top: 1px solid var(--hairline);
+  position: relative;
+}
+/* A verdigris bar on the left that grows as the citation is handled. */
+.cite::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: -1px;
+  bottom: 0;
+  width: 3px;
+  background: var(--verdigris);
+  opacity: var(--patina);
+  transition: opacity var(--base) var(--ease);
+}
+.cite__title {
+  display: block;
+  font-family: var(--font-body);
+  font-size: 1.08rem;
+  color: color-mix(in oklch, var(--ink), var(--verdigris) calc(var(--patina) * 45%));
+  transition: color var(--base) var(--ease);
+}
+.cite:hover .cite__title {
+  color: var(--brass-bright);
+}
+.cite__meta {
+  display: block;
+}
+.cite__meta {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--muted);
+  margin-top: 0.25rem;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   CASE-STUDY PAGE + PROSE  (unchanged detail styling)
+   ───────────────────────────────────────────────────────────────────────── */
+.detail {
+  max-width: var(--measure);
+}
+.detail__title {
+  font-size: var(--t-h1);
+  margin: var(--s-3) 0;
+}
+.back-link {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.03em;
+  color: var(--muted);
+  text-decoration: none;
+}
+.back-link:hover {
+  color: var(--brass-bright);
+}
+.detail__meta {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--muted);
+  margin: 0 0 var(--s-2);
+}
+.detail__authors {
+  color: var(--ink-dim);
+  font-size: 0.98rem;
+  margin: 0 0 var(--s-4);
+}
+.detail__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-4);
+  margin: var(--s-5) 0;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+}
+.detail__links a {
+  color: var(--brass-bright);
+  text-decoration: none;
+  border-bottom: 1px solid var(--verdigris-deep);
+  padding-bottom: 2px;
+}
+.detail__cover {
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--hairline-bright);
+  margin: var(--s-5) 0;
+}
+.prose {
+  font-family: var(--font-body);
+}
+.prose h2 {
+  font-size: var(--t-h2);
+  margin: var(--s-7) 0 var(--s-3);
+  padding-top: var(--s-4);
+  border-top: 1px solid var(--hairline);
+}
+.prose h3 {
+  font-size: var(--t-h3);
+  font-family: var(--font-display);
+  color: var(--ink-dim);
+  margin: var(--s-5) 0 var(--s-2);
+}
+.prose p {
+  margin: 0 0 var(--s-4);
+  color: var(--ink-dim);
+}
+.prose em {
+  color: var(--ink);
+}
+.prose ul {
+  margin: 0 0 var(--s-4);
+  padding-left: 1.1rem;
+}
+.prose li {
+  margin-bottom: var(--s-2);
+  color: var(--ink-dim);
+}
+.prose li::marker {
+  color: var(--verdigris);
+}
+
+.stack-gap > * + * {
+  margin-top: var(--s-6);
+}
+
+/* ═════════════════════════════════════════════════════════════════════════
+   HOME — "The Ledger" (the current, only home)
+   Hero (stacked name + square portrait) · tarnish seam that IS the patina
+   meter · brass figures · Now/Focus/Off-the-clock callouts · contact plate.
+   ═════════════════════════════════════════════════════════════════════════ */
+
+/* ── Hero: oversized stacked name, square portrait ── */
+.lhero {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--s-7);
+  align-items: center;
+  margin-bottom: 0;
+}
+.lhero__head {
+  min-width: 0;
+}
+.lhero__name {
+  display: flex;
+  flex-direction: column;
+  font-size: clamp(3rem, 1.6rem + 6.4vw, 5.6rem);
+  line-height: 0.9;
+  letter-spacing: -0.025em;
+  margin: var(--s-3) 0 var(--s-4);
+}
+.lhero__name span:last-child {
+  color: var(--brass);
+}
+.lhero__lede {
+  font-size: 1.3rem;
+  line-height: 1.45;
+  max-width: 42ch;
+  margin: 0;
+  color: var(--ink-dim);
+}
+.lhero__portrait {
+  width: clamp(180px, 22vw, 260px);
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  object-position: center 20%;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--hairline-bright);
+  filter: saturate(0.94) contrast(1.03);
+}
+@media (max-width: 760px) {
+  .lhero {
+    grid-template-columns: 1fr;
+    gap: var(--s-5);
+  }
+  .lhero__portrait {
+    order: -1;
+    width: 150px;
+  }
+}
+
+/* ── Tarnish seam: the hero↔content divider, doubling as the live patina
+   meter (P3). Its dotted fill grows with the site's accumulated wear. ── */
+.seam {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.seam__track {
+  flex: 1;
+  height: 13px; /* two 5px dot rows */
+  border-radius: 2px;
+  background: var(--bench-2);
+  border: 1px solid var(--hairline);
+  overflow: hidden;
+}
+/* Same dots as the engraved card rule: the ordered, Bayer-dithered --divider-ramp
+   (orange→verdigris), left-anchored and revealing more of the progression as the
+   fill grows with the site's accumulated tarnish. */
+.seam__fill {
+  display: block;
+  height: 100%;
+  min-width: 4px;
+  background: var(--divider-ramp) left center / auto no-repeat;
+  transition: width var(--slow) var(--ease);
+}
+.seam__pct {
+  color: var(--verdigris);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Brass figures (S2): big numeral over a one-word label ── */
+.figures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-5) var(--s-8);
+  margin-bottom: var(--s-6);
+}
+.figure {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+.figure__value {
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: clamp(2.6rem, 1.8rem + 2.6vw, 3.4rem);
+  line-height: 1;
+  color: var(--brass-bright);
+}
+.figure__label {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* ── Callouts (C1): Now / Focus / Off-the-clock, three across ── */
+.callouts {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--s-4);
+}
+.callouts .panel {
+  margin-top: 0;
+}
+@media (max-width: 760px) {
+  .callouts {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Contact plate (CT2): the last object on the bench; it patinas too ── */
+.contact {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--s-6);
+  align-items: center;
+  padding: var(--s-6) var(--s-7);
+}
+.contact__head {
+  font-size: var(--t-h2);
+  max-width: 22ch;
+  margin: var(--s-2) 0 var(--s-3);
+  color: color-mix(in oklch, var(--ink), var(--tint) calc(var(--patina) * 34%));
+  transition: color var(--base) var(--ease);
+}
+.contact__sub {
+  margin: 0;
+  max-width: 44ch;
+  color: var(--ink-dim);
+}
+.contact__cta {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--brass-bright);
+  text-decoration: none;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: var(--s-3) var(--s-4);
+  border: 1px solid
+    color-mix(in oklch, var(--hairline-bright), var(--tint) calc(var(--patina) * 80%));
+  border-radius: var(--radius);
+  transition:
+    color var(--base) var(--ease),
+    border-color var(--base) var(--ease);
+}
+.contact__cta:hover {
+  color: var(--brass);
+  border-color: var(--brass);
+}
+@media (max-width: 640px) {
+  .contact {
+    grid-template-columns: 1fr;
+    padding: var(--s-5);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
